@@ -11,8 +11,8 @@ import mlflow.sklearn
 # ========== STEP 1: Ensure dataset exists ==========
 csv_path = "data/heart.csv"
 
-# ✅ Verified working dataset source (UCI Heart Disease data)
-data_url = "https://raw.githubusercontent.com/datasciencedojo/datasets/master/HeartDisease.csv"
+# ✅ Verified working dataset (Zero to Mastery ML repo)
+data_url = "https://raw.githubusercontent.com/mrdbourke/zero-to-mastery-ml/master/data/heart-disease.csv"
 
 if not os.path.exists(csv_path):
     os.makedirs("data", exist_ok=True)
@@ -38,10 +38,7 @@ print("\n📋 Columns:", df.columns.tolist())
 print(df.head())
 
 # ========== STEP 3: Verify / rename target column ==========
-if "HeartDisease" in df.columns and "target" not in df.columns:
-    df.rename(columns={"HeartDisease": "target"}, inplace=True)
-    print("🔁 Renamed 'HeartDisease' column to 'target'.")
-
+# The dataset uses 'target' as the label, so no rename is needed.
 if "target" not in df.columns:
     raise ValueError(f"❌ 'target' column not found. Available columns: {df.columns.tolist()}")
 
