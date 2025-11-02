@@ -7,10 +7,9 @@ import glob
 st.title("❤️ Heart Disease Prediction App")
 st.write("Enter patient details below to predict the risk of heart disease.")
 
-# === Step 1: Auto-detect the most recent model file ===
+# === Step 1: Auto-load latest model ===
 model_dir = "models"
 model_files = sorted(glob.glob(f"{model_dir}/*.joblib"), key=os.path.getmtime, reverse=True)
-
 if not model_files:
     st.error("❌ No model file found in models/. Please train and push your model first.")
     st.stop()
@@ -19,7 +18,7 @@ else:
     model = joblib.load(model_path)
     st.success(f"✅ Loaded model: {os.path.basename(model_path)}")
 
-# === Step 2: Input form ===
+# === Step 2: Collect inputs ===
 age = st.number_input("Age", 20, 100, 50)
 sex = st.selectbox("Sex", ("Male", "Female"))
 cp = st.selectbox("Chest Pain Type (0–3)", [0, 1, 2, 3])
@@ -41,11 +40,21 @@ input_data = pd.DataFrame([[
 ]], columns=["age", "sex", "cp", "trestbps", "chol", "fbs",
              "restecg", "thalach", "exang", "oldpeak", "slope", "ca", "thal"])
 
-# === Step 4: Prediction ===
+# === Step 4: Align feature names safely ===
+try:
+    if hasattr(model, "feature_names_in_"):
+        input_data = input_data[model.feature_names_in_]
+except Exception as e:
+    st.warning(f"⚠️ Feature name alignment skipped: {e}")
+
+# === Step 5: Prediction ===
 if st.button("Predict"):
-    prediction = model.predict(input_data)[0]
-    st.subheader("Result:")
-    if prediction == 1:
-        st.error("⚠️ The patient is likely to have heart disease.")
-    else:
-        st.success("✅ The patient is likely healthy.")
+    try:
+        prediction = model.predict(input_data)[0]
+        st.subheader("Result:")
+        if prediction == 1:
+            st.error("⚠️ The patient is likely to have heart disease.")
+        else:
+            st.success("✅ The patient is likely healthy.")
+    except Exception as e:
+        st.error(f"❌ Prediction failed: {e}")
