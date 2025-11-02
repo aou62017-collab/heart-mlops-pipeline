@@ -20,31 +20,26 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install --upgrade pip
-          pip install pandas scikit-learn joblib mlflow gradio huggingface_hub git-lfs
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt || echo "No requirements.txt found, skipping."
+          pip install mlflow scikit-learn joblib dvc[gdrive] huggingface_hub gradio
 
-      - name: Prepare folders
-        run: mkdir -p data models
-
-      - name: Download dataset if missing
+      - name: Train the model
         run: |
-          if [ ! -f data/heart.csv ]; then
-            wget -O data/heart.csv https://raw.githubusercontent.com/ageron/handson-ml2/master/datasets/heart/heart.csv
-          fi
+          echo "Starting model training..."
+          python train.py
+          echo "✅ Training finished."
 
-      - name: Train model
-        run: python train.py
-
-      - name: Save model artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: trained-model
-          path: models/
+      - name: Save trained model artifact
+        run: |
+          mkdir -p artifacts
+          cp models/*.joblib artifacts/
+          echo "✅ Model copied to artifacts folder."
 
       - name: Deploy to Hugging Face Spaces
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          HF_USERNAME: rathaa
+          HF_USERNAME: ${{ secrets.HF_USERNAME }}
           SPACE_NAME: heart-mlops-app
         run: |
           set -e
