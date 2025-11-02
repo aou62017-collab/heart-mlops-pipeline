@@ -8,10 +8,11 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 import mlflow
 import mlflow.sklearn
 
-# ========== STEP 1: Ensure dataset exists ========== 
-csv_path = "data/heart.csv"
+# ========== FIX: Restrict MLflow tracking path ==========
+mlflow.set_tracking_uri("file:./mlruns")  # ✅ prevents permission issues in GitHub Actions
 
-# ✅ Verified working dataset (Zero to Mastery ML repo)
+# ========== STEP 1: Ensure dataset exists ==========
+csv_path = "data/heart.csv"
 data_url = "https://raw.githubusercontent.com/mrdbourke/zero-to-mastery-ml/master/data/heart-disease.csv"
 
 if not os.path.exists(csv_path):
@@ -38,7 +39,6 @@ print("\n📋 Columns:", df.columns.tolist())
 print(df.head())
 
 # ========== STEP 3: Verify / rename target column ==========
-# The dataset uses 'target' as the label, so no rename is needed.
 if "target" not in df.columns:
     raise ValueError(f"❌ 'target' column not found. Available columns: {df.columns.tolist()}")
 
@@ -71,10 +71,21 @@ for k, v in metrics.items():
 
 # ========== STEP 7: Log metrics with MLflow ==========
 mlflow.set_experiment("heart_experiment")
+
 with mlflow.start_run():
-    mlflow.log_params({"model": "RandomForest", "max_depth": 5, "n_estimators": 100})
+    mlflow.log_params({
+        "model": "RandomForest",
+        "max_depth": 5,
+        "n_estimators": 100,
+        "random_state": 42
+    })
     mlflow.log_metrics(metrics)
-    mlflow.sklearn.log_model(model, "model")
+    # ✅ Fixed model logging line
+    mlflow.sklearn.log_model(
+        sk_model=model,
+        artifact_path="model",
+        registered_model_name="HeartModel"
+    )
 
 # ========== STEP 8: Save trained model ==========
 os.makedirs("models", exist_ok=True)
