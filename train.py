@@ -81,8 +81,13 @@ with mlflow.start_run():
     })
     mlflow.log_metrics(metrics)
 
-    # ✅ Log model to local artifacts folder only
-    mlflow.sklearn.log_model(sk_model=model, artifact_path="model")
+    # ✅ Provide input_example to avoid red warning
+    input_example = X_test.head(1)
+    mlflow.sklearn.log_model(
+        sk_model=model,
+        artifact_path="model",
+        input_example=input_example
+    )
 
 print("✅ MLflow logging complete.")
 
