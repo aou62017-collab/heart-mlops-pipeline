@@ -16,31 +16,26 @@ if not model_files:
 model = joblib.load(model_files[0])
 st.success(f"✅ Loaded model: {os.path.basename(model_files[0])}")
 
-# === Define expected columns ===
-expected_features = [
-    'age', 'sex', 'cp', 'trestbps', 'chol', 'fbs',
-    'restecg', 'thalach', 'exang', 'oldpeak', 'slope',
-    'ca', 'thal'
-]
+# === Collect inputs ===
+inputs = {
+    "age": st.number_input("Age", 20, 100, 50),
+    "sex": 1 if st.selectbox("Sex", ["Male", "Female"]) == "Male" else 0,
+    "chest_pain_type": st.selectbox("Chest Pain Type", 
+        ["Typical angina", "Atypical angina", "Non-anginal pain", "Asymptomatic"]),
+    "resting_blood_pressure": st.number_input("Resting Blood Pressure (mm Hg)", 80, 200, 120),
+    "cholestoral": st.number_input("Serum Cholestoral (mg/dl)", 100, 400, 200),
+    "fasting_blood_sugar": st.selectbox("Fasting Blood Sugar > 120 mg/dl", [0, 1]),
+    "rest_ecg": st.selectbox("Resting ECG (0–2)", [0, 1, 2]),
+    "Max_heart_rate": st.number_input("Max Heart Rate Achieved", 60, 220, 150),
+    "exercise_induced_angina": st.selectbox("Exercise Induced Angina", [0, 1]),
+    "oldpeak": st.number_input("ST Depression", 0.0, 6.0, 1.0),
+    "slope": st.selectbox("Slope (0–2)", [0, 1, 2]),
+    "ca": st.selectbox("No. of Major Vessels (0–3)", [0, 1, 2, 3]),
+    "thal": st.selectbox("Thalassemia (0, 1, 2)", [0, 1, 2])
+}
 
-# === Collect numeric inputs ===
-inputs = {}
-inputs['age'] = st.number_input("Age", 20, 100, 50)
-inputs['sex'] = st.selectbox("Sex (1=Male, 0=Female)", [1, 0])
-inputs['cp'] = st.selectbox("Chest Pain Type (0–3)", [0, 1, 2, 3])
-inputs['trestbps'] = st.number_input("Resting Blood Pressure", 80, 200, 120)
-inputs['chol'] = st.number_input("Serum Cholesterol (mg/dl)", 100, 400, 200)
-inputs['fbs'] = st.selectbox("Fasting Blood Sugar > 120 mg/dl (1=True, 0=False)", [1, 0])
-inputs['restecg'] = st.selectbox("Resting ECG (0–2)", [0, 1, 2])
-inputs['thalach'] = st.number_input("Max Heart Rate Achieved", 60, 220, 150)
-inputs['exang'] = st.selectbox("Exercise Induced Angina (1=True, 0=False)", [1, 0])
-inputs['oldpeak'] = st.number_input("ST Depression", 0.0, 6.0, 1.0)
-inputs['slope'] = st.selectbox("Slope (0–2)", [0, 1, 2])
-inputs['ca'] = st.selectbox("Number of Major Vessels (0–3)", [0, 1, 2, 3])
-inputs['thal'] = st.selectbox("Thalassemia (0=Normal, 1=Fixed, 2=Reversible)", [0, 1, 2])
-
-# === Create DataFrame with correct column order ===
-input_df = pd.DataFrame([[inputs[feature] for feature in expected_features]], columns=expected_features)
+# === Create input DataFrame ===
+input_df = pd.DataFrame([inputs])
 
 # === Predict ===
 if st.button("Predict"):
