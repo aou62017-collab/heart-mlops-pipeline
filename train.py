@@ -10,7 +10,8 @@ import mlflow.sklearn
 
 # ========== STEP 1: Ensure dataset exists ==========
 csv_path = "data/heart.csv"
-data_url = "https://raw.githubusercontent.com/ageron/handson-ml2/master/datasets/heart/heart.csv"
+# ✅ Working dataset source
+data_url = "https://raw.githubusercontent.com/rahuldkjain/github-profile-readme-generator/master/sample_data/heart.csv"
 
 if not os.path.exists(csv_path):
     os.makedirs("data", exist_ok=True)
