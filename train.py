@@ -8,8 +8,8 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 import mlflow
 import mlflow.sklearn
 
-# ========== FIX: Restrict MLflow tracking path ==========
-mlflow.set_tracking_uri("file:./mlruns")  # ✅ logs locally inside repo (no /content issues)
+# ========== FIX: Restrict MLflow tracking to local directory ==========
+mlflow.set_tracking_uri("file:./mlruns")  # stores logs inside repo folder
 
 # ========== STEP 1: Ensure dataset exists ==========
 csv_path = "data/heart.csv"
@@ -81,11 +81,15 @@ with mlflow.start_run():
     })
     mlflow.log_metrics(metrics)
 
-    # ✅ Provide input_example to avoid red warning
+    # ✅ Fix warning by adding input_example
     input_example = X_test.head(1)
-    mlflow.sklearn.log_model(
+
+    # ✅ Save model safely in local directory to avoid permission issues
+    artifact_path = "mlruns_local"
+    os.makedirs(artifact_path, exist_ok=True)
+    mlflow.sklearn.save_model(
         sk_model=model,
-        artifact_path="model",
+        path=os.path.join(artifact_path, "model"),
         input_example=input_example
     )
 
