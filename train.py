@@ -12,8 +12,15 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 import joblib
 import requests
 
-# ✅ Force MLflow to use a local safe directory
-mlflow.set_tracking_uri("file:./mlruns")
+# ========= STEP 0: Set Safe Paths ==========
+BASE_DIR = os.getcwd()
+MLFLOW_DIR = os.path.join(BASE_DIR, "mlruns_local")
+MODEL_DIR = os.path.join(BASE_DIR, "models")
+os.makedirs(MLFLOW_DIR, exist_ok=True)
+os.makedirs(MODEL_DIR, exist_ok=True)
+
+# ✅ Force MLflow to log everything in ./mlruns_local
+mlflow.set_tracking_uri(f"file:{MLFLOW_DIR}")
 mlflow.set_experiment("heart_experiment")
 
 # ========== STEP 1: Ensure dataset exists ==========
@@ -34,30 +41,26 @@ df = pd.read_csv(csv_path)
 print("✅ Dataset loaded. Shape:", df.shape)
 print("\n📋 Columns:", list(df.columns))
 
-# Standardize column names
 df.columns = [c.strip().lower().replace(" ", "_") for c in df.columns]
-
-# Drop duplicates and missing values
 df = df.drop_duplicates().dropna()
 
 target_col = "target"
 X = df.drop(columns=[target_col])
 y = df[target_col]
 
-# Identify numeric and categorical columns
 categorical_cols = X.select_dtypes(include=["object"]).columns.tolist()
 numeric_cols = X.select_dtypes(include=["int64", "float64"]).columns.tolist()
 
 print(f"\n📊 Numeric: {numeric_cols}\n🔤 Categorical: {categorical_cols}")
 
-# ========== STEP 3: Build preprocessing and model pipeline ==========
+# ========== STEP 3: Build model pipeline ==========
 numeric_transformer = StandardScaler()
 categorical_transformer = OneHotEncoder(handle_unknown="ignore")
 
 preprocessor = ColumnTransformer(
     transformers=[
         ("num", numeric_transformer, numeric_cols),
-        ("cat", categorical_transformer, categorical_cols)
+        ("cat", categorical_transformer, categorical_cols),
     ]
 )
 
@@ -67,12 +70,10 @@ model = Pipeline(steps=[
 ])
 
 # ========== STEP 4: Train/test split ==========
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.2, random_state=42
-)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 print(f"✅ Data split: {len(X_train)} train / {len(X_test)} test")
 
-# ========== STEP 5: Train & evaluate ==========
+# ========== STEP 5: Train, Evaluate, Log ==========
 with mlflow.start_run():
     model.fit(X_train, y_train)
     preds = model.predict(X_test)
@@ -91,12 +92,12 @@ with mlflow.start_run():
         print(f"{k}: {v:.4f}")
         mlflow.log_metric(k, v)
 
-    # ✅ Add input example for MLflow signature inference
+    # ✅ Add input example to fix schema warnings
     sample_input = X_train.iloc[:1]
 
-    # ✅ Define a local artifact directory (no /content)
-    local_model_dir = os.path.join(os.getcwd(), "mlruns_artifacts")
-    os.makedirs(local_model_dir, exist_ok=True)
+    # ✅ Log model to local artifact path
+    artifact_subdir = os.path.join(MLFLOW_DIR, "artifacts_model")
+    os.makedirs(artifact_subdir, exist_ok=True)
 
     mlflow.sklearn.log_model(
         model,
@@ -104,8 +105,9 @@ with mlflow.start_run():
         input_example=sample_input
     )
 
-    # ✅ Save model locally for Streamlit deployment
-    os.makedirs("models", exist_ok=True)
-    model_path = "models/heart_model.joblib"
+    # ✅ Save model for Streamlit app
+    model_path = os.path.join(MODEL_DIR, "heart_model.joblib")
     joblib.dump(model, model_path)
     print(f"\n✅ Model saved locally at: {model_path}")
+
+print("\n🚀 Training complete — no permission errors 🎉")
