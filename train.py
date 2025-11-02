@@ -18,7 +18,6 @@ MODEL_DIR = os.path.join(BASE_DIR, "models")
 os.makedirs(MLFLOW_DIR, exist_ok=True)
 os.makedirs(MODEL_DIR, exist_ok=True)
 
-# ✅ Force MLflow to log everything in ./mlruns_local
 mlflow.set_tracking_uri(f"file:{MLFLOW_DIR}")
 mlflow.set_experiment("heart_experiment")
 
@@ -38,37 +37,38 @@ if not os.path.exists(csv_path):
 # ========== STEP 2: Load and preprocess ==========
 df = pd.read_csv(csv_path)
 print("✅ Dataset loaded. Shape:", df.shape)
-print("\n📋 Original Columns:", list(df.columns))
 
-# Clean column names
-df.columns = [c.strip().lower().replace(" ", "_") for c in df.columns]
+# Clean column names to match what Streamlit will send
+df.columns = ['age', 'sex', 'cp', 'trestbps', 'chol', 'fbs', 'restecg', 
+              'thalach', 'exang', 'oldpeak', 'slope', 'ca', 'thal', 'target']
+
 df = df.drop_duplicates().dropna()
 
 print("🧹 Cleaned Columns:", list(df.columns))
-print("\n🔍 Data types:")
-print(df.dtypes)
 
 target_col = "target"
 X = df.drop(columns=[target_col])
 y = df[target_col]
 
-# ✅ FIX: All columns in heart dataset are numeric, no categorical columns
-print(f"\n📊 All features are numeric: {list(X.columns)}")
+print(f"\n📊 Features for training: {list(X.columns)}")
 
-# ========== STEP 3: Build model pipeline ==========
-# ✅ FIX: Use simple StandardScaler since all features are numeric
+# ========== STEP 3: Build SIMPLE model pipeline ==========
+# No ColumnTransformer, just simple scaling
 model = Pipeline(steps=[
     ("scaler", StandardScaler()),
-    ("clf", RandomForestClassifier(n_estimators=200, max_depth=8, random_state=42))
+    ("classifier", RandomForestClassifier(n_estimators=100, random_state=42))
 ])
 
 # ========== STEP 4: Train/test split ==========
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 print(f"✅ Data split: {len(X_train)} train / {len(X_test)} test")
 
-# ========== STEP 5: Train, Evaluate, Log ==========
+# ========== STEP 5: Train and Save ==========
 with mlflow.start_run():
+    # Train model
     model.fit(X_train, y_train)
+    
+    # Evaluate
     preds = model.predict(X_test)
     probs = model.predict_proba(X_test)[:, 1]
 
@@ -85,25 +85,15 @@ with mlflow.start_run():
         print(f"{k}: {v:.4f}")
         mlflow.log_metric(k, v)
 
-    # ✅ Log input example
-    sample_input = X_train.iloc[:1]
-
-    # ✅ Log model to MLflow
-    mlflow.sklearn.log_model(
-        model,
-        artifact_path="model",
-        input_example=sample_input
-    )
-
     # ✅ Save model for Streamlit app
     model_path = os.path.join(MODEL_DIR, "heart_model.joblib")
     joblib.dump(model, model_path)
     
-    # ✅ ALSO save the feature names for reference
+    # ✅ Save feature names
     feature_names_path = os.path.join(MODEL_DIR, "feature_names.joblib")
     joblib.dump(list(X.columns), feature_names_path)
     
-    print(f"\n✅ Model saved locally at: {model_path}")
-    print(f"✅ Feature names saved at: {feature_names_path}")
+    print(f"\n✅ Model saved at: {model_path}")
+    print(f"✅ Feature names: {list(X.columns)}")
 
-print("\n🚀 Training complete — model is now compatible with Streamlit app 🎉")
+print("\n🚀 Training complete! Now run: streamlit run app.py")
