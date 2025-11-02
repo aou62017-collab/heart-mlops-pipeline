@@ -44,7 +44,7 @@ jobs:
       - name: Deploy to Hugging Face Spaces
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          HF_USERNAME: rathaa        # 👈 Your Hugging Face username
+          HF_USERNAME: rathaa
           SPACE_NAME: heart-mlops-app
         run: |
           set -e
