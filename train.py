@@ -1,56 +1,65 @@
-import pandas as pd, yaml, os
+import os
+import requests
+import pandas as pd
+import joblib
 from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
-import mlflow, mlflow.sklearn
-from model import build_model, save_model
+import mlflow
+import mlflow.sklearn
 
-def load_params(path="params.yaml"):
-    with open(path, "r") as f:
-        return yaml.safe_load(f)
+# ========== Step 1: Ensure dataset is available ==========
+csv_path = "data/heart.csv"
+if not os.path.exists(csv_path):
+    os.makedirs("data", exist_ok=True)
+    url = "https://raw.githubusercontent.com/ageron/handson-ml2/master/datasets/heart/heart.csv"
+    print("📥 Downloading dataset...")
+    response = requests.get(url)
+    with open(csv_path, "wb") as f:
+        f.write(response.content)
+    print("✅ heart.csv downloaded successfully.")
 
-def preprocess(X):
-    X = X.copy()
-    for c in X.columns:
-        if X[c].dtype == "object":
-            X[c] = X[c].astype(str).fillna("Unknown")
-        else:
-            X[c] = pd.to_numeric(X[c], errors="coerce").fillna(X[c].median())
-    return pd.get_dummies(X, drop_first=True)
+# ========== Step 2: Load and check data ==========
+df = pd.read_csv(csv_path)
+print(f"✅ Dataset loaded. Shape: {df.shape}")
 
-params = load_params()
-df = pd.read_csv(params["data"]["path"])
+# ========== Step 3: Split features and target ==========
+X = df.drop("target", axis=1)
+y = df["target"]
 
-target_col = "target"
-for col in df.columns:
-    if col.lower() in ["target", "heartdisease", "output"]:
-        target_col = col
-        break
+# Split train/test
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+print("✅ Data split complete:", X_train.shape, X_test.shape)
 
-y = df[target_col]
-X = preprocess(df.drop(columns=[target_col]))
+# ========== Step 4: Train model ==========
+model = RandomForestClassifier(n_estimators=100, max_depth=5, random_state=42)
+model.fit(X_train, y_train)
+print("✅ Model training complete.")
 
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=params["data"]["test_size"], stratify=y, random_state=params["data"]["random_state"]
-)
+# ========== Step 5: Evaluate ==========
+y_pred = model.predict(X_test)
+y_prob = model.predict_proba(X_test)[:, 1]
 
-model_params = params["model"]
-pipeline = build_model(model_params)
+metrics = {
+    "accuracy": accuracy_score(y_test, y_pred),
+    "precision": precision_score(y_test, y_pred),
+    "recall": recall_score(y_test, y_pred),
+    "f1": f1_score(y_test, y_pred),
+    "auc": roc_auc_score(y_test, y_prob)
+}
 
-mlflow.set_tracking_uri(params["mlflow"]["tracking_uri"])
-mlflow.set_experiment(params["mlflow"]["experiment_name"])
+for k, v in metrics.items():
+    print(f"{k}: {v:.4f}")
 
-with mlflow.start_run() as run:
-    pipeline.fit(X_train, y_train)
-    preds = pipeline.predict(X_test)
-    probs = pipeline.predict_proba(X_test)[:, 1]
-    metrics = {
-        "accuracy": float(accuracy_score(y_test, preds)),
-        "precision": float(precision_score(y_test, preds)),
-        "recall": float(recall_score(y_test, preds)),
-        "f1": float(f1_score(y_test, preds)),
-        "auc": float(roc_auc_score(y_test, probs))
-    }
+# ========== Step 6: Log with MLflow ==========
+mlflow.set_experiment("heart_experiment")
+with mlflow.start_run():
+    mlflow.log_params({"model": "RandomForest", "max_depth": 5, "n_estimators": 100})
     mlflow.log_metrics(metrics)
-    save_model(pipeline, f"models/model_{run.info.run_id}.joblib")
-    print("✅ Training complete.")
-    print("Metrics:", metrics)
+    mlflow.sklearn.log_model(model, "model")
+
+# ========== Step 7: Save trained model ==========
+os.makedirs("models", exist_ok=True)
+model_path = "models/heart_model.joblib"
+joblib.dump(model, model_path)
+print(f"✅ Model saved at: {model_path}")
