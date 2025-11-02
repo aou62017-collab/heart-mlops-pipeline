@@ -1,0 +1,14 @@
+artifact_uri: file:///content/mlops_heart/mlruns/459657868707231142/19cc709f4b334e50bd4fcf75a25d7d00/artifacts
+end_time: 1762093901369
+entry_point_name: ''
+experiment_id: '459657868707231142'
+lifecycle_stage: active
+run_id: 19cc709f4b334e50bd4fcf75a25d7d00
+run_name: learned-mole-686
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1762093901063
+status: 3
+tags: []
+user_id: root

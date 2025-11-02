@@ -1,0 +1,6 @@
+artifact_location: file:///content/mlops_heart/mlruns/459657868707231142
+creation_time: 1762093520694
+experiment_id: '459657868707231142'
+last_update_time: 1762093520694
+lifecycle_stage: active
+name: heart_experiment

@@ -1,0 +1,13 @@
+data:
+  path: data/heart.csv
+  random_state: 42
+  test_size: 0.2
+mlflow:
+  experiment_name: heart_experiment
+  tracking_uri: file:./mlruns
+model:
+  max_depth: 8
+  n_estimators: 100
+  random_state: 42
+  type: random_forest
+seed: 42
