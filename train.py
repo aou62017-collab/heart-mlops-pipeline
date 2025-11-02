@@ -9,7 +9,7 @@ import mlflow
 import mlflow.sklearn
 
 # ========== FIX: Restrict MLflow tracking path ==========
-mlflow.set_tracking_uri("file:./mlruns")  # ✅ prevents permission issues in GitHub Actions
+mlflow.set_tracking_uri("file:./mlruns")  # ✅ logs locally inside repo (no /content issues)
 
 # ========== STEP 1: Ensure dataset exists ==========
 csv_path = "data/heart.csv"
@@ -38,7 +38,7 @@ except Exception as e:
 print("\n📋 Columns:", df.columns.tolist())
 print(df.head())
 
-# ========== STEP 3: Verify / rename target column ==========
+# ========== STEP 3: Verify target column ==========
 if "target" not in df.columns:
     raise ValueError(f"❌ 'target' column not found. Available columns: {df.columns.tolist()}")
 
@@ -80,12 +80,11 @@ with mlflow.start_run():
         "random_state": 42
     })
     mlflow.log_metrics(metrics)
-    # ✅ Fixed model logging line
-    mlflow.sklearn.log_model(
-        sk_model=model,
-        artifact_path="model",
-        registered_model_name="HeartModel"
-    )
+
+    # ✅ Log model to local artifacts folder only
+    mlflow.sklearn.log_model(sk_model=model, artifact_path="model")
+
+print("✅ MLflow logging complete.")
 
 # ========== STEP 8: Save trained model ==========
 os.makedirs("models", exist_ok=True)
