@@ -1,17 +1,22 @@
-import os
-import requests
 import pandas as pd
-import joblib
+import numpy as np
+import os
 import mlflow
 import mlflow.sklearn
 from sklearn.model_selection import train_test_split
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.compose import ColumnTransformer
-from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import Pipeline
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
+import joblib
+import requests
 
-# ===== STEP 1: Load dataset =====
+# ✅ Force MLflow to use local directory
+mlflow.set_tracking_uri("file:./mlruns")
+mlflow.set_experiment("heart_experiment")
+
+# ========== STEP 1: Ensure dataset exists ==========
 csv_path = "data/heart.csv"
 data_url = "https://raw.githubusercontent.com/mrdbourke/zero-to-mastery-ml/master/data/heart-disease.csv"
 
@@ -19,61 +24,78 @@ if not os.path.exists(csv_path):
     os.makedirs("data", exist_ok=True)
     print("📥 Downloading dataset from:", data_url)
     response = requests.get(data_url)
+    response.raise_for_status()
     with open(csv_path, "wb") as f:
         f.write(response.content)
     print("✅ heart.csv downloaded successfully.")
 
+# ========== STEP 2: Load and preprocess ==========
 df = pd.read_csv(csv_path)
-print(f"✅ Dataset loaded. Shape: {df.shape}")
-print("Columns:", list(df.columns))
+print("✅ Dataset loaded. Shape:", df.shape)
+print("\n📋 Columns:", list(df.columns))
 
-# ===== STEP 2: Prepare Data =====
-target = "target"
-features = [col for col in df.columns if col != target]
+# Rename common variants if necessary
+df.columns = [c.strip().lower().replace(" ", "_") for c in df.columns]
 
-X = df[features]
-y = df[target]
+# Drop duplicates, handle NaN
+df = df.drop_duplicates().dropna()
 
+target_col = "target"
+X = df.drop(columns=[target_col])
+y = df[target_col]
+
+# Detect categorical vs numeric
+categorical_cols = X.select_dtypes(include=["object"]).columns.tolist()
+numeric_cols = X.select_dtypes(include=["int64", "float64"]).columns.tolist()
+
+print(f"\n📊 Numeric: {numeric_cols}\n🔤 Categorical: {categorical_cols}")
+
+# ========== STEP 3: Build preprocessing and model pipeline ==========
+numeric_transformer = StandardScaler()
+categorical_transformer = OneHotEncoder(handle_unknown="ignore")
+
+preprocessor = ColumnTransformer(
+    transformers=[
+        ("num", numeric_transformer, numeric_cols),
+        ("cat", categorical_transformer, categorical_cols)
+    ]
+)
+
+model = Pipeline(steps=[
+    ("preprocessor", preprocessor),
+    ("clf", RandomForestClassifier(n_estimators=200, max_depth=8, random_state=42))
+])
+
+# ========== STEP 4: Train/test split ==========
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 print(f"✅ Data split: {len(X_train)} train / {len(X_test)} test")
 
-# ===== STEP 3: Define preprocessing + model pipeline =====
-numeric_features = X_train.columns.tolist()
-numeric_transformer = Pipeline(steps=[("scaler", StandardScaler())])
-
-preprocessor = ColumnTransformer(
-    transformers=[("num", numeric_transformer, numeric_features)],
-    remainder="drop"
-)
-
-pipeline = Pipeline([
-    ("preprocessor", preprocessor),
-    ("model", LogisticRegression(max_iter=1000))
-])
-
-# ===== STEP 4: Train =====
-mlflow.set_tracking_uri("file:./mlruns")
-mlflow.set_experiment("HeartDiseasePrediction")
-
+# ========== STEP 5: Train & evaluate ==========
 with mlflow.start_run():
-    pipeline.fit(X_train, y_train)
-    y_pred = pipeline.predict(X_test)
+    model.fit(X_train, y_train)
+    preds = model.predict(X_test)
+    probs = model.predict_proba(X_test)[:, 1]
 
     metrics = {
-        "accuracy": accuracy_score(y_test, y_pred),
-        "precision": precision_score(y_test, y_pred),
-        "recall": recall_score(y_test, y_pred),
-        "f1": f1_score(y_test, y_pred),
-        "auc": roc_auc_score(y_test, y_pred),
+        "accuracy": accuracy_score(y_test, preds),
+        "precision": precision_score(y_test, preds),
+        "recall": recall_score(y_test, preds),
+        "f1": f1_score(y_test, preds),
+        "auc": roc_auc_score(y_test, probs),
     }
 
+    print("\n📊 Evaluation Metrics:")
     for k, v in metrics.items():
         print(f"{k}: {v:.4f}")
+
+    # Log to MLflow
+    for k, v in metrics.items():
         mlflow.log_metric(k, v)
 
-    mlflow.sklearn.log_model(pipeline, "model")
+    mlflow.sklearn.log_model(model, artifact_path="model")
 
-# ===== STEP 5: Save model =====
-os.makedirs("models", exist_ok=True)
-joblib.dump(pipeline, "models/heart_model.joblib")
-print("✅ Model saved at models/heart_model.joblib")
+    # Save model for Streamlit
+    os.makedirs("models", exist_ok=True)
+    model_path = f"models/heart_model.joblib"
+    joblib.dump(model, model_path)
+    print(f"\n✅ Model saved at: {model_path}")
