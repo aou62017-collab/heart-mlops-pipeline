@@ -5,7 +5,7 @@ import os
 import glob
 
 st.title("❤️ Heart Disease Prediction App")
-st.write("Enter patient details below to predict the risk of heart disease.")
+st.write("Enter patient details below to predict heart disease risk.")
 
 # === Load latest model ===
 model_dir = "models"
@@ -16,31 +16,40 @@ if not model_files:
 model = joblib.load(model_files[0])
 st.success(f"✅ Loaded model: {os.path.basename(model_files[0])}")
 
-# === Collect inputs ===
-inputs = {
-    "age": st.number_input("Age", 20, 100, 50),
-    "sex": 1 if st.selectbox("Sex", ["Male", "Female"]) == "Male" else 0,
-    "cp": st.selectbox("Chest Pain Type (0–3)", [0, 1, 2, 3]),
-    "trestbps": st.number_input("Resting Blood Pressure", 80, 200, 120),
-    "chol": st.number_input("Serum Cholesterol (mg/dl)", 100, 400, 200),
-    "fbs": st.selectbox("Fasting Blood Sugar > 120 mg/dl", [0, 1]),
-    "restecg": st.selectbox("Resting ECG (0–2)", [0, 1, 2]),
-    "thalach": st.number_input("Max Heart Rate Achieved", 60, 220, 150),
-    "exang": st.selectbox("Exercise Induced Angina", [0, 1]),
-    "oldpeak": st.number_input("ST Depression", 0.0, 6.0, 1.0),
-    "slope": st.selectbox("Slope (0–2)", [0, 1, 2]),
-    "ca": st.selectbox("No. of Major Vessels (0–3)", [0, 1, 2, 3]),
-    "thal": st.selectbox("Thalassemia (0, 1, 2)", [0, 1, 2])
-}
+# === Define expected columns ===
+expected_features = [
+    'age', 'sex', 'cp', 'trestbps', 'chol', 'fbs',
+    'restecg', 'thalach', 'exang', 'oldpeak', 'slope',
+    'ca', 'thal'
+]
 
-# === Create input DataFrame ===
-input_df = pd.DataFrame([inputs])
+# === Collect numeric inputs ===
+inputs = {}
+inputs['age'] = st.number_input("Age", 20, 100, 50)
+inputs['sex'] = st.selectbox("Sex (1=Male, 0=Female)", [1, 0])
+inputs['cp'] = st.selectbox("Chest Pain Type (0–3)", [0, 1, 2, 3])
+inputs['trestbps'] = st.number_input("Resting Blood Pressure", 80, 200, 120)
+inputs['chol'] = st.number_input("Serum Cholesterol (mg/dl)", 100, 400, 200)
+inputs['fbs'] = st.selectbox("Fasting Blood Sugar > 120 mg/dl (1=True, 0=False)", [1, 0])
+inputs['restecg'] = st.selectbox("Resting ECG (0–2)", [0, 1, 2])
+inputs['thalach'] = st.number_input("Max Heart Rate Achieved", 60, 220, 150)
+inputs['exang'] = st.selectbox("Exercise Induced Angina (1=True, 0=False)", [1, 0])
+inputs['oldpeak'] = st.number_input("ST Depression", 0.0, 6.0, 1.0)
+inputs['slope'] = st.selectbox("Slope (0–2)", [0, 1, 2])
+inputs['ca'] = st.selectbox("Number of Major Vessels (0–3)", [0, 1, 2, 3])
+inputs['thal'] = st.selectbox("Thalassemia (0=Normal, 1=Fixed, 2=Reversible)", [0, 1, 2])
+
+# === Create DataFrame with correct column order ===
+input_df = pd.DataFrame([[inputs[feature] for feature in expected_features]], columns=expected_features)
 
 # === Predict ===
 if st.button("Predict"):
-    prediction = model.predict(input_df)[0]
-    st.subheader("Result:")
-    if prediction == 1:
-        st.error("⚠️ The patient is likely to have heart disease.")
-    else:
-        st.success("✅ The patient is likely healthy.")
+    try:
+        prediction = model.predict(input_df)[0]
+        st.subheader("Result:")
+        if prediction == 1:
+            st.error("⚠️ The patient is likely to have heart disease.")
+        else:
+            st.success("✅ The patient is likely healthy.")
+    except Exception as e:
+        st.error(f"❌ Prediction failed: {e}")
