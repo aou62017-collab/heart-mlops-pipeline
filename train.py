@@ -8,34 +8,49 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 import mlflow
 import mlflow.sklearn
 
-# Step 1: Ensure dataset exists
+# ========== STEP 1: Ensure dataset exists ==========
 csv_path = "data/heart.csv"
+data_url = "https://raw.githubusercontent.com/ageron/handson-ml2/master/datasets/heart/heart.csv"
+
 if not os.path.exists(csv_path):
     os.makedirs("data", exist_ok=True)
-    url = "https://raw.githubusercontent.com/ageron/handson-ml2/master/datasets/heart/heart.csv"
-    print("📥 Downloading dataset...")
-    response = requests.get(url)
-    with open(csv_path, "wb") as f:
-        f.write(response.content)
-    print("✅ heart.csv downloaded successfully.")
+    print("📥 Downloading dataset from:", data_url)
+    try:
+        response = requests.get(data_url)
+        response.raise_for_status()
+        with open(csv_path, "wb") as f:
+            f.write(response.content)
+        print("✅ heart.csv downloaded successfully.")
+    except Exception as e:
+        print("❌ Failed to download dataset:", e)
+        raise SystemExit("Dataset download failed — stopping pipeline.")
 
-# Step 2: Load dataset
-df = pd.read_csv(csv_path)
-print(f"✅ Dataset loaded. Shape: {df.shape}")
+# ========== STEP 2: Load and inspect dataset ==========
+try:
+    df = pd.read_csv(csv_path)
+    print(f"✅ Dataset loaded. Shape: {df.shape}")
+except Exception as e:
+    raise SystemExit(f"❌ Error reading dataset: {e}")
 
-# Step 3: Split features and target
+print("\n📋 Columns:", df.columns.tolist())
+print(df.head())
+
+# ========== STEP 3: Verify 'target' column exists ==========
+if "target" not in df.columns:
+    raise ValueError(f"❌ 'target' column not found. Available columns: {df.columns.tolist()}")
+
+# ========== STEP 4: Split data ==========
 X = df.drop("target", axis=1)
 y = df["target"]
-
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-print("✅ Data split complete:", X_train.shape, X_test.shape)
+print(f"✅ Data split: {X_train.shape[0]} train / {X_test.shape[0]} test")
 
-# Step 4: Train model
+# ========== STEP 5: Train model ==========
 model = RandomForestClassifier(n_estimators=100, max_depth=5, random_state=42)
 model.fit(X_train, y_train)
 print("✅ Model training complete.")
 
-# Step 5: Evaluate model
+# ========== STEP 6: Evaluate ==========
 y_pred = model.predict(X_test)
 y_prob = model.predict_proba(X_test)[:, 1]
 
@@ -51,14 +66,14 @@ print("\n📊 Evaluation Metrics:")
 for k, v in metrics.items():
     print(f"{k}: {v:.4f}")
 
-# Step 6: Log to MLflow
+# ========== STEP 7: Log with MLflow ==========
 mlflow.set_experiment("heart_experiment")
 with mlflow.start_run():
     mlflow.log_params({"model": "RandomForest", "max_depth": 5, "n_estimators": 100})
     mlflow.log_metrics(metrics)
     mlflow.sklearn.log_model(model, "model")
 
-# Step 7: Save trained model
+# ========== STEP 8: Save trained model ==========
 os.makedirs("models", exist_ok=True)
 model_path = "models/heart_model.joblib"
 joblib.dump(model, model_path)
