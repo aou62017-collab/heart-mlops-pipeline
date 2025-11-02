@@ -7,53 +7,90 @@ import glob
 st.title("❤️ Heart Disease Prediction App")
 st.write("Enter patient details below to predict heart disease risk.")
 
-# === Load latest model ===
+# === Load model and feature names ===
 model_dir = "models"
-model_files = sorted(glob.glob(f"{model_dir}/*.joblib"), key=os.path.getmtime, reverse=True)
-if not model_files:
-    st.error("❌ No model found. Please train and push a model first.")
+try:
+    # Load model
+    model_path = os.path.join(model_dir, "heart_model.joblib")
+    model = joblib.load(model_path)
+    
+    # Load feature names
+    feature_names_path = os.path.join(model_dir, "feature_names.joblib")
+    feature_names = joblib.load(feature_names_path)
+    
+    st.success(f"✅ Model loaded successfully!")
+    st.info(f"Features expected: {', '.join(feature_names)}")
+    
+except Exception as e:
+    st.error(f"❌ Error loading model: {e}")
     st.stop()
 
-# Load the model (skip feature_names.joblib if it exists)
-model_path = [f for f in model_files if "feature_names" not in f][0]
-model = joblib.load(model_path)
-st.success(f"✅ Loaded model: {os.path.basename(model_path)}")
-
-# === Define expected columns ===
-expected_features = [
-    'age', 'sex', 'cp', 'trestbps', 'chol', 'fbs',
-    'restecg', 'thalach', 'exang', 'oldpeak', 'slope',
-    'ca', 'thal'
-]
-
-# === Collect numeric inputs ===
+# === Collect inputs in EXACT same order as training features ===
 inputs = {}
-inputs['age'] = st.number_input("Age", 20, 100, 50)
-inputs['sex'] = st.selectbox("Sex (1=Male, 0=Female)", [1, 0])
-inputs['cp'] = st.selectbox("Chest Pain Type (0–3)", [0, 1, 2, 3])
-inputs['trestbps'] = st.number_input("Resting Blood Pressure", 80, 200, 120)
-inputs['chol'] = st.number_input("Serum Cholesterol (mg/dl)", 100, 400, 200)
-inputs['fbs'] = st.selectbox("Fasting Blood Sugar > 120 mg/dl (1=True, 0=False)", [1, 0])
-inputs['restecg'] = st.selectbox("Resting ECG (0–2)", [0, 1, 2])
-inputs['thalach'] = st.number_input("Max Heart Rate Achieved", 60, 220, 150)
-inputs['exang'] = st.selectbox("Exercise Induced Angina (1=True, 0=False)", [1, 0])
-inputs['oldpeak'] = st.number_input("ST Depression", 0.0, 6.0, 1.0)
-inputs['slope'] = st.selectbox("Slope (0–2)", [0, 1, 2])
-inputs['ca'] = st.selectbox("Number of Major Vessels (0–3)", [0, 1, 2, 3])
-inputs['thal'] = st.selectbox("Thalassemia (0=Normal, 1=Fixed, 2=Reversible)", [0, 1, 2])
 
-# === Create DataFrame with correct column order ===
-input_df = pd.DataFrame([[inputs[feature] for feature in expected_features]], columns=expected_features)
+# Map feature names to input widgets
+feature_descriptions = {
+    'age': "Age",
+    'sex': "Sex (1=Male, 0=Female)", 
+    'cp': "Chest Pain Type (0–3)",
+    'trestbps': "Resting Blood Pressure",
+    'chol': "Serum Cholesterol (mg/dl)",
+    'fbs': "Fasting Blood Sugar > 120 mg/dl (1=True, 0=False)",
+    'restecg': "Resting ECG (0–2)",
+    'thalach': "Max Heart Rate Achieved", 
+    'exang': "Exercise Induced Angina (1=True, 0=False)",
+    'oldpeak': "ST Depression",
+    'slope': "Slope (0–2)",
+    'ca': "Number of Major Vessels (0–3)",
+    'thal': "Thalassemia (0=Normal, 1=Fixed, 2=Reversible)"
+}
+
+# Create inputs in the exact order of feature_names
+for feature in feature_names:
+    if feature == 'age':
+        inputs[feature] = st.number_input(feature_descriptions[feature], 20, 100, 50)
+    elif feature == 'sex':
+        inputs[feature] = st.selectbox(feature_descriptions[feature], [1, 0])
+    elif feature == 'cp':
+        inputs[feature] = st.selectbox(feature_descriptions[feature], [0, 1, 2, 3])
+    elif feature == 'trestbps':
+        inputs[feature] = st.number_input(feature_descriptions[feature], 80, 200, 120)
+    elif feature == 'chol':
+        inputs[feature] = st.number_input(feature_descriptions[feature], 100, 400, 200)
+    elif feature == 'fbs':
+        inputs[feature] = st.selectbox(feature_descriptions[feature], [1, 0])
+    elif feature == 'restecg':
+        inputs[feature] = st.selectbox(feature_descriptions[feature], [0, 1, 2])
+    elif feature == 'thalach':
+        inputs[feature] = st.number_input(feature_descriptions[feature], 60, 220, 150)
+    elif feature == 'exang':
+        inputs[feature] = st.selectbox(feature_descriptions[feature], [1, 0])
+    elif feature == 'oldpeak':
+        inputs[feature] = st.number_input(feature_descriptions[feature], 0.0, 6.0, 1.0)
+    elif feature == 'slope':
+        inputs[feature] = st.selectbox(feature_descriptions[feature], [0, 1, 2])
+    elif feature == 'ca':
+        inputs[feature] = st.selectbox(feature_descriptions[feature], [0, 1, 2, 3])
+    elif feature == 'thal':
+        inputs[feature] = st.selectbox(feature_descriptions[feature], [0, 1, 2])
+
+# === Create DataFrame with EXACT feature order ===
+input_df = pd.DataFrame([inputs], columns=feature_names)
 
 # === Predict ===
-if st.button("Predict"):
+if st.button("Predict Heart Disease Risk"):
     try:
         prediction = model.predict(input_df)[0]
         probability = model.predict_proba(input_df)[0][1]
-        st.subheader("Result:")
+        
+        st.subheader("🎯 Prediction Result:")
         if prediction == 1:
-            st.error(f"⚠️ The patient is likely to have heart disease. (Probability: {probability:.2f})")
+            st.error(f"⚠️ High Risk of Heart Disease (Probability: {probability:.1%})")
+            st.write("Recommendation: Please consult a cardiologist for further evaluation.")
         else:
-            st.success(f"✅ The patient is likely healthy. (Probability: {probability:.2f})")
+            st.success(f"✅ Low Risk of Heart Disease (Probability: {probability:.1%})")
+            st.write("Recommendation: Maintain regular check-ups and a healthy lifestyle.")
+            
     except Exception as e:
         st.error(f"❌ Prediction failed: {e}")
+        st.write("Please ensure all input fields are filled correctly.")
