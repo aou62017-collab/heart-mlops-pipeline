@@ -12,7 +12,7 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 import joblib
 import requests
 
-# ✅ Force MLflow to use local directory (avoids permission errors)
+# ✅ Force MLflow to use a local safe directory
 mlflow.set_tracking_uri("file:./mlruns")
 mlflow.set_experiment("heart_experiment")
 
@@ -93,6 +93,11 @@ with mlflow.start_run():
 
     # ✅ Add input example for MLflow signature inference
     sample_input = X_train.iloc[:1]
+
+    # ✅ Define a local artifact directory (no /content)
+    local_model_dir = os.path.join(os.getcwd(), "mlruns_artifacts")
+    os.makedirs(local_model_dir, exist_ok=True)
+
     mlflow.sklearn.log_model(
         model,
         artifact_path="model",
@@ -103,4 +108,4 @@ with mlflow.start_run():
     os.makedirs("models", exist_ok=True)
     model_path = "models/heart_model.joblib"
     joblib.dump(model, model_path)
-    print(f"\n✅ Model saved at: {model_path}")
+    print(f"\n✅ Model saved locally at: {model_path}")
