@@ -12,7 +12,7 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 import joblib
 import requests
 
-# ✅ Force MLflow to use local directory
+# ✅ Force MLflow to use local directory (avoids permission errors)
 mlflow.set_tracking_uri("file:./mlruns")
 mlflow.set_experiment("heart_experiment")
 
@@ -34,17 +34,17 @@ df = pd.read_csv(csv_path)
 print("✅ Dataset loaded. Shape:", df.shape)
 print("\n📋 Columns:", list(df.columns))
 
-# Rename common variants if necessary
+# Standardize column names
 df.columns = [c.strip().lower().replace(" ", "_") for c in df.columns]
 
-# Drop duplicates, handle NaN
+# Drop duplicates and missing values
 df = df.drop_duplicates().dropna()
 
 target_col = "target"
 X = df.drop(columns=[target_col])
 y = df[target_col]
 
-# Detect categorical vs numeric
+# Identify numeric and categorical columns
 categorical_cols = X.select_dtypes(include=["object"]).columns.tolist()
 numeric_cols = X.select_dtypes(include=["int64", "float64"]).columns.tolist()
 
@@ -67,7 +67,9 @@ model = Pipeline(steps=[
 ])
 
 # ========== STEP 4: Train/test split ==========
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42
+)
 print(f"✅ Data split: {len(X_train)} train / {len(X_test)} test")
 
 # ========== STEP 5: Train & evaluate ==========
@@ -87,15 +89,18 @@ with mlflow.start_run():
     print("\n📊 Evaluation Metrics:")
     for k, v in metrics.items():
         print(f"{k}: {v:.4f}")
-
-    # Log to MLflow
-    for k, v in metrics.items():
         mlflow.log_metric(k, v)
 
-    mlflow.sklearn.log_model(model, artifact_path="model")
+    # ✅ Add input example for MLflow signature inference
+    sample_input = X_train.iloc[:1]
+    mlflow.sklearn.log_model(
+        model,
+        artifact_path="model",
+        input_example=sample_input
+    )
 
-    # Save model for Streamlit
+    # ✅ Save model locally for Streamlit deployment
     os.makedirs("models", exist_ok=True)
-    model_path = f"models/heart_model.joblib"
+    model_path = "models/heart_model.joblib"
     joblib.dump(model, model_path)
     print(f"\n✅ Model saved at: {model_path}")
