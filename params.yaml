@@ -11,3 +11,5 @@ model:
   random_state: 42
   type: random_forest
 seed: 42
+      - name: Run drift monitoring
+        run: python monitor.py
