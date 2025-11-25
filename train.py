@@ -94,6 +94,26 @@ with mlflow.start_run():
     # ✅ Save feature names
     feature_names_path = os.path.join(MODEL_DIR, "feature_names.joblib")
     joblib.dump(list(X.columns), feature_names_path)
+    # ========== STEP 6: Save training logs for monitoring ==========
+log_path = os.path.join(BASE_DIR, "model_registry.csv")
+
+log_data = pd.DataFrame([{
+    "timestamp": pd.Timestamp.now(),
+    "model_path": model_path,
+    "accuracy": metrics["accuracy"],
+    "precision": metrics["precision"],
+    "recall": metrics["recall"],
+    "f1_score": metrics["f1"],
+    "auc": metrics["auc"]
+}])
+
+if not os.path.exists(log_path):
+    log_data.to_csv(log_path, index=False)
+else:
+    log_data.to_csv(log_path, mode="a", header=False, index=False)
+
+print("✅ Model registry updated")
+
     
     print(f"\n✅ Model saved at: {model_path}")
     print(f"✅ Feature names: {list(X.columns)}")
