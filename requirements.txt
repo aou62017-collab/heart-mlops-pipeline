@@ -1,8 +1,8 @@
+streamlit
 pandas
 numpy
 scikit-learn
-mlflow
 joblib
+mlflow
 requests
-streamlit
 pytest
