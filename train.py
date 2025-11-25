@@ -21,6 +21,7 @@ os.makedirs(MODEL_DIR, exist_ok=True)
 
 mlflow.set_tracking_uri(f"file:{MLFLOW_DIR}")
 mlflow.set_experiment("heart_experiment")
+print("🚀 Starting model training...")
 
 # ========== STEP 1: Ensure dataset exists ==========
 csv_path = "data/heart.csv"
