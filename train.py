@@ -1,16 +1,16 @@
-Train.py
-import pandas as pd
-import numpy as np
 import os
+import requests
+import pandas as pd
+import joblib
 import mlflow
 import mlflow.sklearn
+
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
-from sklearn.pipeline import Pipeline
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
-import joblib
-import requests
+from sklearn.pipeline import Pipeline
+
 
 # ========= STEP 0: Set Safe Paths ==========
 BASE_DIR = os.getcwd()
