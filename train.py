@@ -88,4 +88,4 @@ if drift_detected:
     print(f"✅ New model saved: {model_name}")
     print(f"📊 Model accuracy: {acc}")
 
-print("✅ Retraining completed.")
+print("✅ Retraining completed.") 
