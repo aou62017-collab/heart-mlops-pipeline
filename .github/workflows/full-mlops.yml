@@ -40,17 +40,16 @@ jobs:
           cp models/*.joblib artifacts/ || echo "No model found."
           echo "📦 Model artifact saved."
 
-      # Step 6: Upload model artifact to GitHub
+      # Step 6: Upload trained model to GitHub
       - name: Upload trained model
         uses: actions/upload-artifact@v4
         with:
           name: trained-model
           path: artifacts/
 
-      # Step 7: Upload model registry (if exists)
+      # Step 7: Upload model registry file (if exists)
       - name: Upload model registry
         uses: actions/upload-artifact@v4
         with:
           name: model-registry
           path: model_registry.csv
-
