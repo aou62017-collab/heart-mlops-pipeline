@@ -4,6 +4,7 @@ import pandas as pd
 import joblib
 import mlflow
 import mlflow.sklearn
+from datetime import datetime
 
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
@@ -12,37 +13,36 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 from sklearn.pipeline import Pipeline
 
 
-# ========= STEP 0: Set Safe Paths ==========
-BASE_DIR = os.getcwd()
-MLFLOW_DIR = os.path.join(BASE_DIR, "mlruns_local")
-MODEL_DIR = os.path.join(BASE_DIR, "models")
+print("🚀 Starting model training...")
 
-os.makedirs(MLFLOW_DIR, exist_ok=True)
+# ========= PATHS =========
+BASE_DIR = os.getcwd()
+DATA_DIR = os.path.join(BASE_DIR, "data")
+MODEL_DIR = os.path.join(BASE_DIR, "models")
+MLFLOW_DIR = os.path.join(BASE_DIR, "mlruns_local")
+REGISTRY_PATH = os.path.join(BASE_DIR, "model_registry.csv")
+
+os.makedirs(DATA_DIR, exist_ok=True)
 os.makedirs(MODEL_DIR, exist_ok=True)
+os.makedirs(MLFLOW_DIR, exist_ok=True)
 
 mlflow.set_tracking_uri(f"file:{MLFLOW_DIR}")
 mlflow.set_experiment("heart_experiment")
 
-print("🚀 Starting model training...")
-
-
-# ========== STEP 1: Ensure dataset exists ==========
-csv_path = "data/heart.csv"
+# ========= STEP 1: Ensure dataset exists =========
+csv_path = os.path.join(DATA_DIR, "heart.csv")
 data_url = "https://raw.githubusercontent.com/mrdbourke/zero-to-mastery-ml/master/data/heart-disease.csv"
 
 if not os.path.exists(csv_path):
-    os.makedirs("data", exist_ok=True)
-    print("📥 Downloading dataset from:", data_url)
+    print("📥 Downloading dataset...")
     response = requests.get(data_url)
     response.raise_for_status()
     with open(csv_path, "wb") as f:
         f.write(response.content)
-    print("✅ heart.csv downloaded successfully.")
+    print("✅ Dataset downloaded.")
 
-
-# ========== STEP 2: Load and preprocess ==========
+# ========= STEP 2: Load and preprocess =========
 df = pd.read_csv(csv_path)
-print("✅ Dataset loaded. Shape:", df.shape)
 
 df.columns = [
     'age', 'sex', 'cp', 'trestbps', 'chol', 'fbs', 'restecg',
@@ -50,35 +50,27 @@ df.columns = [
 ]
 
 df = df.drop_duplicates().dropna()
-print("🧹 Cleaned Columns:", list(df.columns))
 
-target_col = "target"
-X = df.drop(columns=[target_col])
-y = df[target_col]
+X = df.drop("target", axis=1)
+y = df["target"]
 
-print(f"\n📊 Features for training: {list(X.columns)}")
+print("✅ Data loaded. Samples:", len(df))
 
-
-# ========== STEP 3: Build model pipeline ==========
-model = Pipeline(steps=[
-    ("scaler", StandardScaler()),
-    ("classifier", RandomForestClassifier(n_estimators=100, random_state=42))
-])
-
-
-# ========== STEP 4: Train/test split ==========
+# ========= STEP 3: Train/test split =========
 X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.2, random_state=42
 )
-print(f"✅ Data split: {len(X_train)} train / {len(X_test)} test")
 
+# ========= STEP 4: Build pipeline =========
+model = Pipeline([
+    ("scaler", StandardScaler()),
+    ("clf", RandomForestClassifier(n_estimators=100, random_state=42))
+])
 
-# ========== STEP 5 + 6: Train, Save & Monitor ==========
+# ========= STEP 5: Train + log =========
 with mlflow.start_run():
-    # Train model
     model.fit(X_train, y_train)
 
-    # Evaluate
     preds = model.predict(X_test)
     probs = model.predict_proba(X_test)[:, 1]
 
@@ -90,41 +82,42 @@ with mlflow.start_run():
         "auc": roc_auc_score(y_test, probs),
     }
 
-    print("\n📊 Evaluation Metrics:")
     for k, v in metrics.items():
-        print(f"{k}: {v:.4f}")
         mlflow.log_metric(k, v)
 
-    # ✅ Save model
-    model_path = os.path.join(MODEL_DIR, "heart_model.joblib")
-    joblib.dump(model, model_path)
+    print("📊 Metrics:", metrics)
 
-    # ✅ Save feature names
-    feature_names_path = os.path.join(MODEL_DIR, "feature_names.joblib")
-    joblib.dump(list(X.columns), feature_names_path)
+# ========= STEP 6: Save PRIMARY model =========
+joblib.dump(model, os.path.join(MODEL_DIR, "heart_model.joblib"))
 
-    print(f"\n✅ Model saved at: {model_path}")
-    print(f"✅ Feature names saved")
+# Save features
+joblib.dump(list(X.columns), os.path.join(MODEL_DIR, "feature_names.joblib"))
 
-    # ========== STEP 6: Save training logs ==========
-    log_path = os.path.join(BASE_DIR, "model_registry.csv")
+# ========= STEP 7: Save VERSIONED model =========
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+versioned_name = f"heart_model_v{timestamp}.joblib"
+versioned_path = os.path.join(MODEL_DIR, versioned_name)
 
-    log_data = pd.DataFrame([{
-        "timestamp": pd.Timestamp.now(),
-        "model_path": model_path,
-        "accuracy": metrics["accuracy"],
-        "precision": metrics["precision"],
-        "recall": metrics["recall"],
-        "f1_score": metrics["f1"],
-        "auc": metrics["auc"]
-    }])
+joblib.dump(model, versioned_path)
 
-    if not os.path.exists(log_path):
-        log_data.to_csv(log_path, index=False)
-    else:
-        log_data.to_csv(log_path, mode="a", header=False, index=False)
+print(f"✅ Versioned model saved: {versioned_name}")
 
-    print("✅ Model registry updated")
+# ========= STEP 8: Update model registry =========
+log = pd.DataFrame([{
+    "timestamp": timestamp,
+    "model_path": versioned_path,
+    "accuracy": metrics["accuracy"],
+    "precision": metrics["precision"],
+    "recall": metrics["recall"],
+    "f1_score": metrics["f1"],
+    "auc": metrics["auc"]
+}])
 
+if os.path.exists(REGISTRY_PATH):
+    log.to_csv(REGISTRY_PATH, mode="a", header=False, index=False)
+else:
+    log.to_csv(REGISTRY_PATH, index=False)
 
-print("\n🚀 Training complete! Now run: streamlit run app.py")
+print("✅ model_registry.csv updated")
+
+print("\n🚀 Training completed successfully.")
