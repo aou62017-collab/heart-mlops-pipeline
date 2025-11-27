@@ -1,91 +1,161 @@
 import os
 import requests
-import joblib
 import pandas as pd
+import joblib
+import mlflow
+import mlflow.sklearn
+
 from datetime import datetime
 from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score
 from sklearn.preprocessing import StandardScaler
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
 from sklearn.pipeline import Pipeline
 
-print("♻️ Starting automated retraining pipeline...")
 
-# ========== PATHS ==========
-DATA_DIR = "data"
-DATA_PATH = os.path.join(DATA_DIR, "heart.csv")
-MODEL_DIR = "models"
-REGISTRY_PATH = "model_registry.csv"
-
-os.makedirs(DATA_DIR, exist_ok=True)
+# ========= STEP 0: Set Safe Paths ==========
+BASE_DIR = os.getcwd()
+MLFLOW_DIR = os.path.join(BASE_DIR, "mlruns_local")
+MODEL_DIR = os.path.join(BASE_DIR, "models")
+os.makedirs(MLFLOW_DIR, exist_ok=True)
 os.makedirs(MODEL_DIR, exist_ok=True)
 
-# ========== DOWNLOAD DATA IF NOT EXISTS ==========
+mlflow.set_tracking_uri(f"file:{MLFLOW_DIR}")
+mlflow.set_experiment("heart_experiment")
+
+print("🚀 Starting model training...")
+
+
+# ========== STEP 1: Ensure dataset exists ==========
+csv_path = "data/heart.csv"
 data_url = "https://raw.githubusercontent.com/mrdbourke/zero-to-mastery-ml/master/data/heart-disease.csv"
 
-if not os.path.exists(DATA_PATH):
+if not os.path.exists(csv_path):
+    os.makedirs("data", exist_ok=True)
     print("📥 Downloading dataset...")
     response = requests.get(data_url)
     response.raise_for_status()
-    with open(DATA_PATH, "wb") as f:
+    with open(csv_path, "wb") as f:
         f.write(response.content)
     print("✅ Dataset downloaded.")
 
-# ========== LOAD DATA ==========
-df = pd.read_csv(DATA_PATH)
+
+# ========== STEP 2: Load and preprocess ==========
+df = pd.read_csv(csv_path)
 
 df.columns = [
     'age', 'sex', 'cp', 'trestbps', 'chol', 'fbs', 'restecg',
     'thalach', 'exang', 'oldpeak', 'slope', 'ca', 'thal', 'target'
 ]
 
-X = df.drop("target", axis=1)
-y = df["target"]
+df = df.drop_duplicates().dropna()
 
-# ========== SIMULATE DRIFT ==========
-drift_detected = True
+target_col = "target"
+X = df.drop(columns=[target_col])
+y = df[target_col]
 
-if drift_detected:
-    print("⚠️ Drift detected — Retraining triggered")
+print(f"✅ Dataset loaded. Shape: {df.shape}")
+print(f"📊 Features: {list(X.columns)}")
 
-    # Train/Test Split
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42
-    )
 
-    # Pipeline
-    model = Pipeline([
-        ("scaler", StandardScaler()),
-        ("classifier", RandomForestClassifier(n_estimators=100, random_state=42))
-    ])
+# ========== STEP 3: Train/Test Split ==========
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42
+)
 
-    # Train
+
+# ========== STEP 4: BASELINE MODEL ==========
+print("\n🔹 Training Baseline Model (Logistic Regression)...")
+
+baseline_model = Pipeline([
+    ("scaler", StandardScaler()),
+    ("clf", LogisticRegression(max_iter=1000))
+])
+
+baseline_model.fit(X_train, y_train)
+baseline_preds = baseline_model.predict(X_test)
+baseline_probs = baseline_model.predict_proba(X_test)[:, 1]
+
+baseline_metrics = {
+    "baseline_accuracy": accuracy_score(y_test, baseline_preds),
+    "baseline_precision": precision_score(y_test, baseline_preds),
+    "baseline_recall": recall_score(y_test, baseline_preds),
+    "baseline_f1": f1_score(y_test, baseline_preds),
+    "baseline_auc": roc_auc_score(y_test, baseline_probs),
+}
+
+print("\n📊 Baseline Model Metrics:")
+for k, v in baseline_metrics.items():
+    print(f"{k}: {v:.4f}")
+
+
+# ========== STEP 5: Main MLOps Model (Random Forest) ==========
+print("\n⚙️ Training Random Forest (MLOps Pipeline)...")
+
+model = Pipeline([
+    ("scaler", StandardScaler()),
+    ("classifier", RandomForestClassifier(n_estimators=100, random_state=42))
+])
+
+with mlflow.start_run():
+
     model.fit(X_train, y_train)
 
-    # Evaluate
     preds = model.predict(X_test)
-    acc = accuracy_score(y_test, preds)
+    probs = model.predict_proba(X_test)[:, 1]
 
-    # ========== SAVE VERSIONED MODEL ==========
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    model_name = f"heart_model_v{timestamp}.joblib"
-    model_path = os.path.join(MODEL_DIR, model_name)
+    metrics = {
+        "accuracy": accuracy_score(y_test, preds),
+        "precision": precision_score(y_test, preds),
+        "recall": recall_score(y_test, preds),
+        "f1": f1_score(y_test, preds),
+        "auc": roc_auc_score(y_test, probs),
+    }
 
-    joblib.dump(model, model_path)
+    print("\n📊 MLOps Model Metrics:")
+    for k, v in metrics.items():
+        print(f"{k}: {v:.4f}")
+        mlflow.log_metric(k, v)
 
-    # ========== UPDATE MODEL REGISTRY ==========
-    log = pd.DataFrame([{
-        "timestamp": timestamp,
-        "model_path": model_path,
-        "accuracy": acc
-    }])
 
-    if os.path.exists(REGISTRY_PATH):
-        log.to_csv(REGISTRY_PATH, mode="a", header=False, index=False)
-    else:
-        log.to_csv(REGISTRY_PATH, index=False)
+# ========== STEP 6: Save Production Model ==========
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+model_name = f"heart_model_v{timestamp}.joblib"
+model_path = os.path.join(MODEL_DIR, model_name)
 
-    print(f"✅ New model saved: {model_name}")
-    print(f"📊 Model accuracy: {acc}")
+joblib.dump(model, model_path)
 
-print("✅ Retraining completed.") 
+joblib.dump(list(X.columns), os.path.join(MODEL_DIR, "feature_names.joblib"))
+
+print(f"\n✅ Production model saved: {model_name}")
+
+
+# ========== STEP 7: Update Model Registry ==========
+registry_path = os.path.join(BASE_DIR, "model_registry.csv")
+
+log_data = pd.DataFrame([{
+    "timestamp": timestamp,
+    "model_path": model_path,
+    "accuracy": metrics["accuracy"],
+    "precision": metrics["precision"],
+    "recall": metrics["recall"],
+    "f1_score": metrics["f1"],
+    "auc": metrics["auc"],
+
+    # Baseline Metrics
+    "baseline_accuracy": baseline_metrics["baseline_accuracy"],
+    "baseline_precision": baseline_metrics["baseline_precision"],
+    "baseline_recall": baseline_metrics["baseline_recall"],
+    "baseline_f1": baseline_metrics["baseline_f1"],
+    "baseline_auc": baseline_metrics["baseline_auc"],
+}])
+
+if not os.path.exists(registry_path):
+    log_data.to_csv(registry_path, index=False)
+else:
+    log_data.to_csv(registry_path, mode="a", header=False, index=False)
+
+print("📦 Model registry updated successfully.")
+
+print("\n🚀 Training complete! Now run: streamlit run app.py")
