@@ -6,4 +6,4 @@ joblib
 mlflow
 requests
 pytest
-matplotlib
+matplotlib 
