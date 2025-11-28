@@ -1,72 +1,51 @@
 import os
-import requests
-import pandas as pd
 import joblib
-import mlflow
-import mlflow.sklearn
-
+import pandas as pd
 from datetime import datetime
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
+from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
+import matplotlib.pyplot as plt
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay, roc_curve, auc
 
+print("🚀 Starting full training pipeline...")
 
-# ========= STEP 0: Set Safe Paths ==========
-BASE_DIR = os.getcwd()
-MLFLOW_DIR = os.path.join(BASE_DIR, "mlruns_local")
-MODEL_DIR = os.path.join(BASE_DIR, "models")
-os.makedirs(MLFLOW_DIR, exist_ok=True)
+# --------------------------
+# Paths
+# --------------------------
+DATA_PATH = "data/heart.csv"
+MODEL_DIR = "models"
+REGISTRY_PATH = "model_registry.csv"
+
 os.makedirs(MODEL_DIR, exist_ok=True)
 
-mlflow.set_tracking_uri(f"file:{MLFLOW_DIR}")
-mlflow.set_experiment("heart_experiment")
-
-print("🚀 Starting model training...")
-
-
-# ========== STEP 1: Ensure dataset exists ==========
-csv_path = "data/heart.csv"
-data_url = "https://raw.githubusercontent.com/mrdbourke/zero-to-mastery-ml/master/data/heart-disease.csv"
-
-if not os.path.exists(csv_path):
-    os.makedirs("data", exist_ok=True)
-    print("📥 Downloading dataset...")
-    response = requests.get(data_url)
-    response.raise_for_status()
-    with open(csv_path, "wb") as f:
-        f.write(response.content)
-    print("✅ Dataset downloaded.")
-
-
-# ========== STEP 2: Load and preprocess ==========
-df = pd.read_csv(csv_path)
+# --------------------------
+# Load Dataset
+# --------------------------
+df = pd.read_csv(DATA_PATH)
 
 df.columns = [
     'age', 'sex', 'cp', 'trestbps', 'chol', 'fbs', 'restecg',
     'thalach', 'exang', 'oldpeak', 'slope', 'ca', 'thal', 'target'
 ]
 
-df = df.drop_duplicates().dropna()
+X = df.drop("target", axis=1)
+y = df["target"]
 
-target_col = "target"
-X = df.drop(columns=[target_col])
-y = df[target_col]
-
-print(f"✅ Dataset loaded. Shape: {df.shape}")
-print(f"📊 Features: {list(X.columns)}")
-
-
-# ========== STEP 3: Train/Test Split ==========
+# --------------------------
+# Split data
+# --------------------------
 X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.2, random_state=42
 )
 
-
-# ========== STEP 4: BASELINE MODEL ==========
-print("\n🔹 Training Baseline Model (Logistic Regression)...")
+# --------------------------
+# Baseline Model (Logistic Regression)
+# --------------------------
+print("\n⚙️ Training Baseline Model (Logistic Regression)...")
 
 baseline_model = Pipeline([
     ("scaler", StandardScaler()),
@@ -74,88 +53,110 @@ baseline_model = Pipeline([
 ])
 
 baseline_model.fit(X_train, y_train)
+
 baseline_preds = baseline_model.predict(X_test)
 baseline_probs = baseline_model.predict_proba(X_test)[:, 1]
 
-baseline_metrics = {
-    "baseline_accuracy": accuracy_score(y_test, baseline_preds),
-    "baseline_precision": precision_score(y_test, baseline_preds),
-    "baseline_recall": recall_score(y_test, baseline_preds),
-    "baseline_f1": f1_score(y_test, baseline_preds),
-    "baseline_auc": roc_auc_score(y_test, baseline_probs),
-}
+baseline_accuracy = accuracy_score(y_test, baseline_preds)
+baseline_precision = precision_score(y_test, baseline_preds)
+baseline_recall = recall_score(y_test, baseline_preds)
+baseline_f1 = f1_score(y_test, baseline_preds)
+baseline_auc = roc_auc_score(y_test, baseline_probs)
 
 print("\n📊 Baseline Model Metrics:")
-for k, v in baseline_metrics.items():
-    print(f"{k}: {v:.4f}")
+print(f"baseline_accuracy: {baseline_accuracy:.4f}")
+print(f"baseline_precision: {baseline_precision:.4f}")
+print(f"baseline_recall: {baseline_recall:.4f}")
+print(f"baseline_f1: {baseline_f1:.4f}")
+print(f"baseline_auc: {baseline_auc:.4f}")
 
-
-# ========== STEP 5: Main MLOps Model (Random Forest) ==========
+# --------------------------
+# MLOps Model (Random Forest)
+# --------------------------
 print("\n⚙️ Training Random Forest (MLOps Pipeline)...")
 
 model = Pipeline([
     ("scaler", StandardScaler()),
-    ("classifier", RandomForestClassifier(n_estimators=100, random_state=42))
+    ("clf", RandomForestClassifier(n_estimators=100, random_state=42))
 ])
 
-with mlflow.start_run():
+model.fit(X_train, y_train)
 
-    model.fit(X_train, y_train)
+preds = model.predict(X_test)
+probs = model.predict_proba(X_test)[:, 1]
 
-    preds = model.predict(X_test)
-    probs = model.predict_proba(X_test)[:, 1]
+accuracy = accuracy_score(y_test, preds)
+precision = precision_score(y_test, preds)
+recall = recall_score(y_test, preds)
+f1 = f1_score(y_test, preds)
+auc_score = roc_auc_score(y_test, probs)
 
-    metrics = {
-        "accuracy": accuracy_score(y_test, preds),
-        "precision": precision_score(y_test, preds),
-        "recall": recall_score(y_test, preds),
-        "f1": f1_score(y_test, preds),
-        "auc": roc_auc_score(y_test, probs),
-    }
+print("\n📊 MLOps Model Metrics:")
+print(f"accuracy: {accuracy:.4f}")
+print(f"precision: {precision:.4f}")
+print(f"recall: {recall:.4f}")
+print(f"f1: {f1:.4f}")
+print(f"auc: {auc_score:.4f}")
 
-    print("\n📊 MLOps Model Metrics:")
-    for k, v in metrics.items():
-        print(f"{k}: {v:.4f}")
-        mlflow.log_metric(k, v)
-
-
-# ========== STEP 6: Save Production Model ==========
+# --------------------------
+# Save MLOps model
+# --------------------------
 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 model_name = f"heart_model_v{timestamp}.joblib"
 model_path = os.path.join(MODEL_DIR, model_name)
 
 joblib.dump(model, model_path)
 
-joblib.dump(list(X.columns), os.path.join(MODEL_DIR, "feature_names.joblib"))
-
-print(f"\n✅ Production model saved: {model_name}")
-
-
-# ========== STEP 7: Update Model Registry ==========
-registry_path = os.path.join(BASE_DIR, "model_registry.csv")
-
-log_data = pd.DataFrame([{
+# --------------------------
+# Update model registry
+# --------------------------
+log = pd.DataFrame([{
     "timestamp": timestamp,
-    "model_path": model_path,
-    "accuracy": metrics["accuracy"],
-    "precision": metrics["precision"],
-    "recall": metrics["recall"],
-    "f1_score": metrics["f1"],
-    "auc": metrics["auc"],
-
-    # Baseline Metrics
-    "baseline_accuracy": baseline_metrics["baseline_accuracy"],
-    "baseline_precision": baseline_metrics["baseline_precision"],
-    "baseline_recall": baseline_metrics["baseline_recall"],
-    "baseline_f1": baseline_metrics["baseline_f1"],
-    "baseline_auc": baseline_metrics["baseline_auc"],
+    "model_name": model_name,
+    "accuracy": accuracy,
+    "precision": precision,
+    "recall": recall,
+    "f1": f1,
+    "auc": auc_score
 }])
 
-if not os.path.exists(registry_path):
-    log_data.to_csv(registry_path, index=False)
+if os.path.exists(REGISTRY_PATH):
+    log.to_csv(REGISTRY_PATH, mode="a", header=False, index=False)
 else:
-    log_data.to_csv(registry_path, mode="a", header=False, index=False)
+    log.to_csv(REGISTRY_PATH, index=False)
 
-print("📦 Model registry updated successfully.")
+print(f"\n✅ Model saved: {model_name}")
 
-print("\n🚀 Training complete! Now run: streamlit run app.py")
+# -----------------------------
+# Generate and Save Evaluation Plots
+# -----------------------------
+
+print("\n📊 Generating evaluation plots...")
+
+# Confusion Matrix
+cm = confusion_matrix(y_test, preds)
+disp = ConfusionMatrixDisplay(confusion_matrix=cm)
+disp.plot()
+plt.title("Confusion Matrix")
+plt.savefig("confusion_matrix.png")
+plt.close()
+
+# ROC Curve
+fpr, tpr, _ = roc_curve(y_test, probs)
+roc_auc = auc(fpr, tpr)
+
+plt.plot(fpr, tpr, label=f"AUC = {roc_auc:.4f}")
+plt.plot([0, 1], [0, 1], "r--")
+plt.xlabel("False Positive Rate")
+plt.ylabel("True Positive Rate")
+plt.title("ROC Curve")
+plt.legend()
+plt.savefig("roc_curve.png")
+plt.close()
+
+print("✅ Confusion matrix and ROC curve saved.")
+
+# --------------------------
+# Finish
+# --------------------------
+print("\n✅ Full training pipeline completed successfully.")
