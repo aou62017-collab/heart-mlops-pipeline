@@ -47,9 +47,18 @@ jobs:
           name: trained-model
           path: artifacts/
 
-      # Step 7: Upload model registry file (if exists)
+      # Step 7: Upload model registry file
       - name: Upload model registry
         uses: actions/upload-artifact@v4
         with:
           name: model-registry
           path: model_registry.csv
+
+      # Step 8: Upload evaluation images
+      - name: Upload evaluation images
+        uses: actions/upload-artifact@v4
+        with:
+          name: evaluation-images
+          path: |
+            confusion_matrix.png
+            roc_curve.png
